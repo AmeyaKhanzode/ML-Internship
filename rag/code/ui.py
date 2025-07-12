@@ -13,7 +13,7 @@ with importnb.Notebook():
 print("="*198)
 convo_db_utils.init_db()
 
-st.set_page_config("📚 Smart Document Assistant", layout="wide")
+st.set_page_config("HR Assistant", layout="wide")
 
 def get_file_hash(file):
     return hashlib.md5(f"{file.name}_{file.size}".encode()).hexdigest()
@@ -36,7 +36,7 @@ if 'just_added_entry' not in st.session_state:
 if 'current_uploaded_files' not in st.session_state:
     st.session_state.current_uploaded_files = []
 
-st.title("📚 Smart Document Assistant")
+st.title("HR Assistant")
 col_chat, col_upload = st.columns([2, 1], gap="large")
 
 with col_chat:
@@ -156,20 +156,12 @@ with col_chat:
                 if st.button("👎", key=f"thumbs_down_{response_id}"):
                     convo_db_utils.update_feedback(response_id, "down")
                     st.success("👎 Feedback recorded :( Regenerating enhanced response.")
-                    enhanced_response = rag.generate_enhanced_response(st.session_state.chat_history[-2]["content"], st.session_state.chat_history[-1]["content"], st.session_state.qa_chain)
-
-                    now = datetime.now().strftime("%H:%M")
-                    new_response_id = str(uuid.uuid4())
-
-                    st.session_state.chat_history.append({
-                        "response_id": new_response_id,
-                        "role": "bot",
-                        "content": f"✨ **Enhanced Response:**\n\n{enhanced_response}",
-                        "timestamp": now
-                    })
-                    st.session_state.response_ids.append(new_response_id)
-        
-                    # Rerun to show the new message
+                    # Set is_thinking to True and rerun, so the thinking bubble is shown before generating enhanced response
+                    st.session_state.is_thinking = "enhanced"
+                    st.session_state.enhanced_context = {
+                        "prev_user": st.session_state.chat_history[-2]["content"],
+                        "prev_bot": st.session_state.chat_history[-1]["content"]
+                    }
                     st.rerun()
 
 
@@ -183,11 +175,31 @@ with col_chat:
             </div>
             """, unsafe_allow_html=True
         )
+        # If is_thinking is 'enhanced', generate enhanced response after showing thinking
+        if st.session_state.is_thinking == "enhanced":
+            prev_user = st.session_state.enhanced_context["prev_user"]
+            prev_bot = st.session_state.enhanced_context["prev_bot"]
+            try:
+                enhanced_response = rag.generate_enhanced_response(prev_user, prev_bot, st.session_state.qa_chain)
+            except Exception as e:
+                enhanced_response = f"⚠️ Error: {e}"
+            now = datetime.now().strftime("%H:%M")
+            new_response_id = str(uuid.uuid4())
+            st.session_state.chat_history.append({
+                "response_id": new_response_id,
+                "role": "bot",
+                "content": f"✨ **Enhanced Response:**\n\n{enhanced_response}",
+                "timestamp": now
+            })
+            st.session_state.response_ids.append(new_response_id)
+            st.session_state.is_thinking = False
+            st.session_state.enhanced_context = None
+            st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
     # --- Chat Input Form ---
     with st.form("chat_form", clear_on_submit=True):
-        user_input = st.text_input("Ask something about your documents:")
-        submitted = st.form_submit_button("Send")
+        user_input = st.text_input("Ask something about your documents:", disabled=st.session_state.is_thinking)
+        submitted = st.form_submit_button("Send", disabled=st.session_state.is_thinking)
     if submitted and user_input:
         now = datetime.now().strftime("%H:%M")
         query_id = str(uuid.uuid4())
@@ -267,7 +279,7 @@ with col_upload:
                     except Exception as e:
                         st.error(f"❌ Error updating QA chain: {str(e)}")
                 else:
-                    st.info("No new files were processed.")
+                    st.info("File(s) already processed.")
         else:
             st.info("All uploaded documents are already processed.")
     if st.session_state.chat_history != [] and st.session_state.just_added_entry == False:
