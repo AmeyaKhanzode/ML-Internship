@@ -34,7 +34,7 @@ if 'response_ids' not in st.session_state:
 if 'just_added_entry' not in st.session_state:
     st.session_state.just_added_entry = False
 if 'current_uploaded_files' not in st.session_state:
-    st.session_state.current_uploaded_files = []
+    st.session_state.current_uploaded_files = set()
 if 'show_feedback_reasons' not in st.session_state:
     st.session_state.show_feedback_reasons = {}
 if 'selected_reasons' not in st.session_state:
@@ -294,27 +294,22 @@ if page == "HR Assistant":
     with col_upload:
         st.subheader("📁 Upload Documents")
         uploaded_files = st.file_uploader("Supported formats: PDF, TXT, DOCX", type=["pdf", "txt", "docx", "xlsx", "xlsb"], accept_multiple_files=True)
-        print(f"UPLOADED FILES----->>>>>\n{uploaded_files}")
-        # Track removed files
-        # uploaded files will have a list of the file objects
-        if uploaded_files:
-            current_file_hashes = {db_utils.get_file_hash(f) for f in uploaded_files}
-            print(f"current_file_hashes: {current_file_hashes}")
-            previous_file_hashes = {db_utils.get_file_hash(f) for f in st.session_state.current_uploaded_files}
-            print(f"previous_files_hashes: {previous_file_hashes}")
-            removed_file_hashes = previous_file_hashes - current_file_hashes
-            print(f"removed_file_hashes: {removed_file_hashes}")
-            
-            if (removed_file_hashes and 
-                not st.session_state.is_thinking and 
-                not st.session_state.just_added_entry and
-                len(st.session_state.current_uploaded_files) > 0):  # Only if we had files before
-                
+
+        current_file_hashes = {db_utils.get_file_hash(f) for f in uploaded_files}
+        st.session_state.current_uploaded_files.update(current_file_hashes)
+        print(f"currently uploaded files in the session state are: {st.session_state.current_uploaded_files}")
+
+        print(f"current_file_hashes: {current_file_hashes}")
+        if current_file_hashes:
+            removed_file_hashes = st.session_state.current_uploaded_files - current_file_hashes
+            print(f"now removed file hashes are: {removed_file_hashes}")
+           
+            if removed_file_hashes:
                 st.session_state.processed_files -= removed_file_hashes
+                st.session_state.current_uploaded_files -= set(removed_file_hashes)
                 for removed_file_hash in removed_file_hashes:
                     db_utils.mark_for_deletion(removed_file_hash)
 
-            st.session_state.current_uploaded_files = uploaded_files
         
         if uploaded_files:
             new_files = [f for f in uploaded_files if db_utils.get_file_hash(f) not in st.session_state.processed_files]
@@ -450,8 +445,9 @@ elif page == "Feedback Analysis":
     for i, entry in enumerate(bad_qrs):
         st.markdown(f"""
             <div class='bad-qr'>
-                <h3>Query: {bad_qrs[i][0]}</h3>
-                <div class='response-text'>{bad_qrs[i][1]}</div>
+                <h3>Query: {bad_qrs[i]["query"]}</h3>
+                <p>Reason: {bad_qrs[i]["reason"]}</p>
+                <div class='response-text'>{bad_qrs[i]["response"]}</div>
             </div>
         """, unsafe_allow_html=True)
 

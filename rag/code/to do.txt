@@ -2,3 +2,5 @@ insert company logo
 change name to hr chat - done
 make an admin page to see disliked question-answers
 take input from user on why answer was bad
+
+# need to remove the removed file hash from current uploaded files session state
