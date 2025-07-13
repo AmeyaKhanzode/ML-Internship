@@ -35,6 +35,10 @@ if 'just_added_entry' not in st.session_state:
     st.session_state.just_added_entry = False
 if 'current_uploaded_files' not in st.session_state:
     st.session_state.current_uploaded_files = []
+if 'show_feedback_reasons' not in st.session_state:
+    st.session_state.show_feedback_reasons = {}
+if 'selected_reasons' not in st.session_state:
+    st.session_state.selected_reasons = {}
 
 PAGES = {
     "HR Assistant": "main",
@@ -162,24 +166,57 @@ if page == "HR Assistant":
             if role == "bot":
                 # Get the response_id from the message itself
                 response_id = msg.get("response_id", "unknown")
+
+                reasons = [
+                    "Answer is incomplete.",
+                    "Answer is irrelevant",
+                    "Answer is completely wrong",
+                    "No answer given"
+                ]
                 
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button("👍", key=f"thumbs_up_{response_id}"):
-                        convo_db_utils.update_feedback(response_id, "up")
+                        convo_db_utils.update_feedback(response_id, "up", "None")
                         st.success("👍 Feedback recorded!")
+                        
                 with col2:
                     if st.button("👎", key=f"thumbs_down_{response_id}"):
-                        convo_db_utils.update_feedback(response_id, "down")
-                        st.success("👎 Feedback recorded :( Regenerating enhanced response.")
-                        # Set is_thinking to True and rerun, so the thinking bubble is shown before generating enhanced response
-                        st.session_state.is_thinking = "enhanced"
-                        prev_user, prev_bot = convo_db_utils.get_thumbs_down_query(response_id)
-                        st.session_state.enhanced_context = {
-                            "prev_user": prev_user,
-                            "prev_bot": prev_bot
-                        }
+                        st.session_state.show_feedback_reasons[response_id] = True
                         st.rerun()
+                
+                # Show feedback reason selection if thumbs down was clicked
+                if st.session_state.show_feedback_reasons.get(response_id, False):
+                    st.write("**Please tell us why you gave a thumbs down:**")
+                    selected_reason = st.radio(
+                        "Select a reason:",
+                        reasons,
+                        key=f"reason_radio_{response_id}"
+                    )
+                    
+                    col_submit1, col_submit2 = st.columns(2)
+                    with col_submit1:
+                        if st.button("Submit Reason", key=f"submit_reason_{response_id}"):
+                            convo_db_utils.update_feedback(response_id, "down", selected_reason)
+                            st.success("Thank you for sharing your feedback! Regenerating new response.")
+                            
+                            # Clear the feedback reason display
+                            st.session_state.show_feedback_reasons[response_id] = False
+                            
+                            # Set is_thinking to True and rerun
+                            st.session_state.is_thinking = "enhanced"
+                            prev_user, prev_bot, reason = convo_db_utils.get_thumbs_down_query(response_id)
+                            st.session_state.enhanced_context = {
+                                "prev_user": prev_user,
+                                "prev_bot": prev_bot,
+                                "reason": reason
+                            }
+                            st.rerun()
+                    
+                    with col_submit2:
+                        if st.button("Cancel", key=f"cancel_reason_{response_id}"):
+                            st.session_state.show_feedback_reasons[response_id] = False
+                            st.rerun()
 
 
         if st.session_state.is_thinking:
@@ -194,10 +231,12 @@ if page == "HR Assistant":
             )
             # If is_thinking is 'enhanced', generate enhanced response after showing thinking
             if st.session_state.is_thinking == "enhanced":
+
                 prev_user = st.session_state.enhanced_context["prev_user"]
                 prev_bot = st.session_state.enhanced_context["prev_bot"]
+                bad_reason = st.session_state.enhanced_context["reason"]
                 try:
-                    enhanced_response = rag.generate_enhanced_response(prev_user, prev_bot, st.session_state.qa_chain)
+                    enhanced_response = rag.generate_enhanced_response(prev_user, prev_bot, bad_reason, st.session_state.qa_chain)
                 except Exception as e:
                     enhanced_response = f"⚠️ Error: {e}"
                 now = datetime.now().strftime("%H:%M")
@@ -213,17 +252,22 @@ if page == "HR Assistant":
                 st.session_state.enhanced_context = None
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
+        
         # --- Chat Input Form ---
         with st.form("chat_form", clear_on_submit=True):
             user_input = st.text_input("Ask something about your documents:", disabled=st.session_state.is_thinking)
             submitted = st.form_submit_button("Send", disabled=st.session_state.is_thinking)
+        
+        # Set thinking state IMMEDIATELY when query is submitted
         if submitted and user_input:
+            st.session_state.is_thinking = True
             now = datetime.now().strftime("%H:%M")
             query_id = str(uuid.uuid4())
             st.session_state.chat_history.append({"query_id": query_id, "role": "user", "content": user_input, "timestamp": now})
-            st.session_state.is_thinking = True
             st.rerun()
-        if st.session_state.is_thinking:
+        
+        # Process the query if we're thinking
+        if st.session_state.is_thinking and st.session_state.is_thinking != "enhanced":
             user_msg = st.session_state.chat_history[-1]["content"]
             try:
                 result = rag.handle_query(user_msg, st.session_state.qa_chain, None)['result']
@@ -243,27 +287,32 @@ if page == "HR Assistant":
             })
             st.session_state.response_ids.append(response_id)
             st.session_state.is_thinking = False
-            st.session_state.just_added_entry = False
+            st.session_state.just_added_entry = False  # Reset here, but it will be set to True below
             st.rerun()
+    
     # --- File Upload Section ---
     with col_upload:
         st.subheader("📁 Upload Documents")
         uploaded_files = st.file_uploader("Supported formats: PDF, TXT, DOCX", type=["pdf", "txt", "docx", "xlsx", "xlsb"], accept_multiple_files=True)
-        
+        print(f"UPLOADED FILES----->>>>>\n{uploaded_files}")
         # Track removed files
-        if uploaded_files is not None:
+        # uploaded files will have a list of the file objects
+        if uploaded_files:
             current_file_hashes = {db_utils.get_file_hash(f) for f in uploaded_files}
+            print(f"current_file_hashes: {current_file_hashes}")
             previous_file_hashes = {db_utils.get_file_hash(f) for f in st.session_state.current_uploaded_files}
-            
+            print(f"previous_files_hashes: {previous_file_hashes}")
             removed_file_hashes = previous_file_hashes - current_file_hashes
+            print(f"removed_file_hashes: {removed_file_hashes}")
             
-            if removed_file_hashes:
-                print(f"Files removed: {removed_file_hashes}")
-
+            if (removed_file_hashes and 
+                not st.session_state.is_thinking and 
+                not st.session_state.just_added_entry and
+                len(st.session_state.current_uploaded_files) > 0):  # Only if we had files before
+                
                 st.session_state.processed_files -= removed_file_hashes
                 for removed_file_hash in removed_file_hashes:
                     db_utils.mark_for_deletion(removed_file_hash)
-                    print(f"Removed file with hash {removed_file_hash} from vector db")
 
             st.session_state.current_uploaded_files = uploaded_files
         
@@ -299,17 +348,27 @@ if page == "HR Assistant":
                         st.info("File(s) already processed.")
             else:
                 st.info("All uploaded documents are already processed.")
+        
+        # Database entry logic - runs after query processing
         if st.session_state.chat_history != [] and st.session_state.just_added_entry == False:
-            entry = {
-                "query": st.session_state.chat_history[-2]["content"],
-                "response": st.session_state.chat_history[-1]["content"],
-                "response_id": st.session_state.response_ids[-1],
-                "session_id": st.session_state.session_id
-            }
-            print(f"Entry: {entry}")
-            print("="*200)
-            convo_db_utils.add_entry(entry)
-            st.session_state.just_added_entry = True
+            # Only add entry if we have both user and bot messages
+            if len(st.session_state.chat_history) >= 2:
+                last_msg = st.session_state.chat_history[-1]
+                second_last_msg = st.session_state.chat_history[-2]
+                
+                # Make sure we have a user query followed by a bot response
+                if second_last_msg["role"] == "user" and last_msg["role"] == "bot":
+                    entry = {
+                        "query": second_last_msg["content"],
+                        "response": last_msg["content"],
+                        "response_id": st.session_state.response_ids[-1],
+                        "session_id": st.session_state.session_id
+                    }
+                    print(f"Entry: {entry}")
+                    print("="*200)
+                    convo_db_utils.add_entry(entry)
+                    st.session_state.just_added_entry = True
+    
     print("="*198)
 
 if page == "Admin":
