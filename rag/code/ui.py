@@ -13,7 +13,10 @@ with importnb.Notebook():
 print("="*198)
 convo_db_utils.init_db()
 
-st.set_page_config("HR Assistant", layout="wide")
+st.set_page_config("HR Assistant", layout="wide", initial_sidebar_state="collapsed")
+
+# Company logo and tagline
+st.image("mobinext-logo-black.png", width=300)
 
 if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
@@ -49,6 +52,10 @@ if 'current_page' in st.session_state and st.session_state.current_page == "Feed
 
 if page == "HR Assistant":
     st.title("HR Assistant")
+    st.markdown(
+        "<p style='color: #888; font-size: 0.9em; margin-top: -10px;'>Powered by MobiNext Technologies Pvt. Ltd.</p>", 
+        unsafe_allow_html=True
+    )
     col_chat, col_upload = st.columns([2, 1], gap="large")
 
     with col_chat:
