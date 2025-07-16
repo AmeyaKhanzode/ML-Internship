@@ -39,6 +39,8 @@ if 'show_feedback_reasons' not in st.session_state:
     st.session_state.show_feedback_reasons = {}
 if 'selected_reasons' not in st.session_state:
     st.session_state.selected_reasons = {}
+if 'bad_feedback_count' not in st.session_state:
+    st.session_state.bad_feedback_count = {}
 
 PAGES = {
     "HR Assistant": "main",
@@ -166,6 +168,10 @@ if page == "HR Assistant":
             if role == "bot":
                 # Get the response_id from the message itself
                 response_id = msg.get("response_id", "unknown")
+                
+                # Create unique key suffix based on message index to avoid duplicate keys
+                msg_index = st.session_state.chat_history.index(msg)
+                unique_key_suffix = f"{response_id}_{msg_index}"
 
                 reasons = [
                     "Answer is incomplete.",
@@ -176,46 +182,71 @@ if page == "HR Assistant":
                 
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.button("👍", key=f"thumbs_up_{response_id}"):
+                    if st.button("👍", key=f"thumbs_up_{unique_key_suffix}"):
                         convo_db_utils.update_feedback(response_id, "up", "None")
                         st.success("👍 Feedback recorded!")
                         
                 with col2:
-                    if st.button("👎", key=f"thumbs_down_{response_id}"):
-                        st.session_state.show_feedback_reasons[response_id] = True
+                    if st.button("👎", key=f"thumbs_down_{unique_key_suffix}"):
+                        print(f"Thumbs down clicked for response_id: {response_id}")
+                        st.session_state.show_feedback_reasons[unique_key_suffix] = True
                         st.rerun()
                 
                 # Show feedback reason selection if thumbs down was clicked
-                if st.session_state.show_feedback_reasons.get(response_id, False):
+                if st.session_state.show_feedback_reasons.get(unique_key_suffix, False):
                     st.write("**Please tell us why you gave a thumbs down:**")
                     selected_reason = st.radio(
                         "Select a reason:",
                         reasons,
-                        key=f"reason_radio_{response_id}"
+                        key=f"reason_radio_{unique_key_suffix}"
                     )
                     
                     col_submit1, col_submit2 = st.columns(2)
                     with col_submit1:
-                        if st.button("Submit Reason", key=f"submit_reason_{response_id}"):
+                        if st.button("Submit Reason", key=f"submit_reason_{unique_key_suffix}"):
                             convo_db_utils.update_feedback(response_id, "down", selected_reason)
-                            st.success("Thank you for sharing your feedback! Regenerating new response.")
                             
-                            # Clear the feedback reason display
-                            st.session_state.show_feedback_reasons[response_id] = False
+                            # Increment bad feedback count for this response
+                            st.session_state.bad_feedback_count[response_id] = st.session_state.bad_feedback_count.get(response_id, 0) + 1
                             
-                            # Set is_thinking to True and rerun
-                            st.session_state.is_thinking = "enhanced"
-                            prev_user, prev_bot, reason = convo_db_utils.get_thumbs_down_query(response_id)
-                            st.session_state.enhanced_context = {
-                                "prev_user": prev_user,
-                                "prev_bot": prev_bot,
-                                "reason": reason
-                            }
-                            st.rerun()
-                    
+                            print(f"Bad feedback count for {response_id}: {st.session_state.bad_feedback_count[response_id]}")
+                            
+                            # Check if this is the second dislike for this response
+                            if st.session_state.bad_feedback_count[response_id] >= 2:
+                                now = datetime.now().strftime("%H:%M")
+                                st.session_state.chat_history.append({
+                                    "response_id": response_id,
+                                    "role": "bot",
+                                    "content": "Sorry for the back to back wrong feedbacks.\nFor accurate details kindly contact our HR. Name: Cristiano Ronaldo Contact Number: +91 2839173921 Email ID: ronaldothegoat@gmail.com",
+                                    "timestamp": now
+                                })
+                                
+                                st.session_state.show_feedback_reasons[unique_key_suffix] = False
+                                st.rerun()
+                            else:
+                                st.success("Thank you for sharing your feedback! Regenerating new response.")
+                                
+                                # Clear the feedback reason display
+                                st.session_state.show_feedback_reasons[unique_key_suffix] = False
+                                
+                                # Set is_thinking to True and rerun
+                                result = convo_db_utils.get_thumbs_down_query(response_id)
+                                if result is not None:
+                                    prev_user, prev_bot, reason = result
+                                    st.session_state.enhanced_context = {
+                                        "prev_user": prev_user,
+                                        "prev_bot": prev_bot,
+                                        "reason": reason,
+                                        "original_response_id": response_id
+                                    }
+                                    st.session_state.is_thinking = "enhanced"
+                                    st.rerun()
+                                else:
+                                    st.error("Could not retrieve previous query and response for enhancement.")
+                                    st.session_state.show_feedback_reasons[unique_key_suffix] = False
                     with col_submit2:
-                        if st.button("Cancel", key=f"cancel_reason_{response_id}"):
-                            st.session_state.show_feedback_reasons[response_id] = False
+                        if st.button("Cancel", key=f"cancel_reason_{unique_key_suffix}"):
+                            st.session_state.show_feedback_reasons[unique_key_suffix] = False
                             st.rerun()
 
 
@@ -235,19 +266,20 @@ if page == "HR Assistant":
                 prev_user = st.session_state.enhanced_context["prev_user"]
                 prev_bot = st.session_state.enhanced_context["prev_bot"]
                 bad_reason = st.session_state.enhanced_context["reason"]
+                original_response_id = st.session_state.enhanced_context["original_response_id"]
+                
                 try:
                     enhanced_response = rag.generate_enhanced_response(prev_user, prev_bot, bad_reason, st.session_state.qa_chain)
                 except Exception as e:
                     enhanced_response = f"⚠️ Error: {e}"
+                
                 now = datetime.now().strftime("%H:%M")
-                new_response_id = str(uuid.uuid4())
                 st.session_state.chat_history.append({
-                    "response_id": new_response_id,
+                    "response_id": original_response_id,  # Use same response_id to track dislikes
                     "role": "bot",
                     "content": f"✨ **Enhanced Response:**\n\n{enhanced_response}",
                     "timestamp": now
                 })
-                st.session_state.response_ids.append(new_response_id)
                 st.session_state.is_thinking = False
                 st.session_state.enhanced_context = None
                 st.rerun()

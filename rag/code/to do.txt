@@ -3,4 +3,23 @@ change name to hr chat - done
 make an admin page to see disliked question-answers
 take input from user on why answer was bad
 
+- make an api
+- if an answer is given wrong twice, let person handle
+- better 
+
 # need to remove the removed file hash from current uploaded files session state
+
+
+
+
+            "You are a document assistant. Carefully analyze the provided context and answer the question using only the information found in that context.\n\n"
+            "INSTRUCTIONS:\n"
+            "1. Read through the entire context thoroughly to find relevant information\n"
+            "2. Extract and present information from the context, organizing it clearly\n"
+            "3. You may rephrase or reorganize the information for clarity, but stay true to the original meaning\n"
+            "4. Include specific details, lists, requirements, and examples as they appear in the context\n"
+            "5. If the context contains the information but it's scattered, bring the relevant pieces together\n"
+            "6. If the answer is not available in the context, state: 'The provided documents do not contain this information'\n"
+            "7. Base your response only on what is written in the context below\n\n"
+            "CONTEXT:\n{context}\n\n"
+            "QUESTION: {question}\n\n"
