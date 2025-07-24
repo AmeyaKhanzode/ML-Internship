@@ -56,6 +56,9 @@ page = st.sidebar.selectbox("Select Page", list(PAGES.keys()))
 if 'current_page' in st.session_state and st.session_state.current_page == "Feedback Analysis":
     page = "Feedback Analysis"
 
+if 'current_page' in st.session_state and st.session_state.current_page == "File Management":
+    page = "File Management"
+
 if page == "HR Assistant":
     st.title("HR Assistant")
     st.markdown(
@@ -449,20 +452,146 @@ if page == "Admin":
                 except Exception as e:
                     st.error(f"❌ Error: {e}")
             
-            st.subheader("Feedback Analysis")
             if st.button("Analyze Feedback"):
                 st.session_state.current_page = "Feedback Analysis"
                 st.rerun()
             
-            if st.button("💬 Clear Chat History"):
-                st.session_state.chat_history = []
-                st.session_state.response_ids = []
-                st.success("✅ Chat history cleared!")
+            if st.button("📁 Manage Files"):
+                st.session_state.current_page = "File Management"
+                st.rerun()
         
         # Logout button
         if st.button("🚪 Logout"):
             st.session_state.admin_authenticated = False
             st.rerun()
+
+elif page == "File Management":
+    st.title("🗂️ File Management")
+
+    if st.button("← Back to Admin"):
+        if 'current_page' in st.session_state:
+            del st.session_state.current_page
+        st.rerun()
+    
+    # Function to delete file by hash
+    def delete_file_by_hash(file_hash, file_name):
+        try:
+            deleted_chunks = db_utils.mark_for_deletion(file_hash)
+            if deleted_chunks or deleted_chunks == []:  # Empty list is also valid
+                # Remove from session state if present
+                if file_hash in st.session_state.processed_files:
+                    st.session_state.processed_files.remove(file_hash)
+                if file_hash in st.session_state.current_uploaded_files:
+                    st.session_state.current_uploaded_files.remove(file_hash)
+                
+                # Recreate QA chain after deletion
+                st.session_state.qa_chain = rag.create_qa_chain(st.session_state.retriever)
+                return True
+            return False
+        except Exception as e:
+            st.error(f"Error deleting file {file_name}: {e}")
+            return False
+    
+    # File upload section
+    st.subheader("📤 Upload New Documents")
+    uploaded_files = st.file_uploader(
+        "Choose files to upload", 
+        type=["pdf", "txt", "docx", "xlsx", "xlsb"], 
+        accept_multiple_files=True,
+        key="admin_file_upload"
+    )
+    
+    if uploaded_files:
+        if st.button("Process Uploaded Files"):
+            with st.spinner("Processing documents..."):
+                processed_count = 0
+                for file in uploaded_files:
+                    try:
+                        file_hash = db_utils.get_file_hash(file)
+                        if file_hash not in st.session_state.processed_files:
+                            file.seek(0)
+                            result = rag.pipeline(st.session_state.vectordb, file)
+                            if result:
+                                st.session_state.processed_files.add(file_hash)
+                                processed_count += 1
+                                st.success(f"✅ Processed: {file.name}")
+                            else:
+                                st.warning(f"⚠️ No content extracted from: {file.name}")
+                        else:
+                            st.info(f"📄 Already processed: {file.name}")
+                    except Exception as e:
+                        st.error(f"❌ Error processing {file.name}: {str(e)}")
+                
+                if processed_count > 0:
+                    st.session_state.qa_chain = rag.create_qa_chain(st.session_state.retriever)
+                    st.success(f"Successfully processed {processed_count} new file(s)!")
+                    st.rerun()
+    
+    st.markdown("---")
+    
+    # Display all files in table format
+    st.subheader("📋 All Documents")
+    
+    files = db_utils.get_all_files()
+    
+    if not files:
+        st.info("📭 No documents found in the database.")
+    else:
+        st.write(f"**Total Documents:** {len(files)}")
+        
+        # Create table headers
+        col1, col2, col3, col4, col5 = st.columns([1, 3, 2, 2, 2])
+        
+        with col1:
+            st.write("**Sr No**")
+        with col2:
+            st.write("**File Name**")
+        with col3:
+            st.write("**File Hash**")
+        with col4:
+            st.write("**Status**")
+        with col5:
+            st.write("**Action**")
+        
+        st.markdown("---")
+        
+        # Display each file as a table row
+        for i, file_info in enumerate(files, 1):
+            doc_id, doc_hash, doc_name, doc_chunk_ids, status = file_info
+            
+            col1, col2, col3, col4, col5 = st.columns([1, 3, 2, 2, 2])
+            
+            with col1:
+                st.write(f"{i}")
+            
+            with col2:
+                st.write(f"📄 {doc_name}")
+            
+            with col3:
+                st.write(f"`{doc_hash[:12]}...`")
+            
+            with col4:
+                # Add status badge styling
+                if status == "Completed":
+                    st.success(f"✅ {status}")
+                elif status == "Pending Vector":
+                    st.warning(f"⏳ {status}")
+                else:
+                    st.error(f"🗑️ {status}")
+            
+            with col5:
+                if status == "Completed":
+                    if st.button("🗑️ Delete", key=f"delete_{doc_id}", type="secondary"):
+                        if delete_file_by_hash(doc_hash, doc_name):
+                            st.success(f"✅ Deleted: {doc_name}")
+                            st.rerun()
+                        else:
+                            st.error(f"❌ Failed to delete: {doc_name}")
+                
+                elif status in ["Pending Vector", "Deleted Pending Vector"]:
+                    st.info("File not uploaded/processed")
+            st.markdown("---")
+
 
 elif page == "Feedback Analysis":
     st.title("📊 Feedback Analysis")
