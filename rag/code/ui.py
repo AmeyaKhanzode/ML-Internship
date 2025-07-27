@@ -414,7 +414,7 @@ if page == "Admin":
         
         if st.button("Login"):
             # Set your admin password here
-            ADMIN_PASSWORD = "mobinext"  # Change this to your desired password
+            ADMIN_PASSWORD = "mobi"  # Change this to your desired password
             
             if password == ADMIN_PASSWORD:
                 st.session_state.admin_authenticated = True
@@ -442,15 +442,47 @@ if page == "Admin":
         with col2:
             st.subheader("🗑️ Database Management")
             
-            if st.button("🗑️ Clear Vector Database"):
-                try:
-                    rag.flush_db()
-                    st.session_state.processed_files = set()
-                    st.session_state.vectordb, st.session_state.retriever = rag.init_db()
-                    st.session_state.qa_chain = rag.create_qa_chain(st.session_state.retriever)
-                    st.success("✅ Vector database cleared!")
-                except Exception as e:
-                    st.error(f"❌ Error: {e}")
+            # Initialize confirmation state
+            if 'confirm_clear_db' not in st.session_state:
+                st.session_state.confirm_clear_db = False
+            
+            if not st.session_state.confirm_clear_db:
+                if st.button("🗑️ Clear Vector Database"):
+                    st.session_state.confirm_clear_db = True
+                    st.rerun()
+            else:
+                # Show warning and confirmation
+                st.error("⚠️ **DANGER ZONE** ⚠️")
+                st.warning("""
+                **This action will permanently delete:**
+                - All processed documents from the vector database
+                - All document embeddings and searchable content
+                - Your current session's processed files list
+                
+                **You will need to re-upload and re-process all documents.**
+                
+                Are you absolutely sure you want to continue?
+                """)
+                
+                col_confirm1, col_confirm2 = st.columns(2)
+                
+                with col_confirm1:
+                    if st.button("Yes, delete everything", type="primary"):
+                        try:
+                            rag.flush_db()
+                            st.session_state.processed_files = set()
+                            st.session_state.vectordb, st.session_state.retriever = rag.init_db()
+                            st.session_state.qa_chain = rag.create_qa_chain(st.session_state.retriever)
+                            st.session_state.confirm_clear_db = False
+                            st.success("✅ Vector database cleared!")
+                        except Exception as e:
+                            st.error(f"❌ Error: {e}")
+                            st.session_state.confirm_clear_db = False
+                
+                with col_confirm2:
+                    if st.button("Cancel"):
+                        st.session_state.confirm_clear_db = False
+                        st.rerun()
             
             if st.button("Analyze Feedback"):
                 st.session_state.current_page = "Feedback Analysis"
