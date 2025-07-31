@@ -50,102 +50,188 @@ PAGES = {
 if 'page' not in st.session_state:
     st.session_state.pages = list(PAGES.keys())
 
-page = st.sidebar.selectbox("Select Page", list(PAGES.keys()))
+# Initialize login state
+if 'user_authenticated' not in st.session_state:
+    st.session_state.user_authenticated = False
+if 'username' not in st.session_state:
+    st.session_state.username = ""
 
-# Handle hidden feedback analysis page
-if 'current_page' in st.session_state and st.session_state.current_page == "Feedback Analysis":
-    page = "Feedback Analysis"
+# Show login page if not authenticated
+if not st.session_state.user_authenticated:
+    # Login Page
+    st.markdown("""
+    <div style='text-align: center; padding: 50px 0;'>
+        <h1 style='color: #2E86AB; margin-bottom: 30px;'>🏢 HR Assistant Portal</h1>
+        <p style='color: #666; font-size: 1.2em; margin-bottom: 40px;'>Welcome to MobiNext Technologies HR Assistant</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Center the login form
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown("""
+        <div style='background: #f8f9fa; padding: 40px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+        """, unsafe_allow_html=True)
+        
+        st.subheader("🔐 User Login")
+        
+        with st.form("login_form"):
+            username = st.text_input("👤 Username", placeholder="Enter your username")
+            password = st.text_input("🔑 Password", type="password", placeholder="Enter your password")
+            
+            col_login1, col_login2 = st.columns(2)
+            with col_login1:
+                login_submitted = st.form_submit_button("🚀 Login", use_container_width=True)
+            with col_login2:
+                guest_login = st.form_submit_button("👤 Guest Access", use_container_width=True)
+        
+        # Login validation
+        if login_submitted and username and password:
+            # Define valid users (you can expand this or connect to a database)
+            VALID_USERS = {
+                "admin": "mobi123",
+                "hr": "hr2024",
+                "user": "user123",
+                "demo": "demo"
+            }
+            
+            if username in VALID_USERS and VALID_USERS[username] == password:
+                st.session_state.user_authenticated = True
+                st.session_state.username = username
+                st.success(f"✅ Welcome back, {username}!")
+                st.rerun()
+            else:
+                st.error("❌ Invalid username or password")
+        
+        elif guest_login:
+            st.session_state.user_authenticated = True
+            st.session_state.username = "Guest User"
+            st.success("✅ Welcome, Guest!")
+            st.rerun()
+        
+        elif login_submitted:
+            st.warning("⚠️ Please enter both username and password")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Login instructions
+        st.markdown("""
+        <div style='margin-top: 30px; text-align: center; color: #666;'>
+            <h4>Demo Credentials:</h4>
+            <p><strong>Username:</strong> demo | <strong>Password:</strong> demo</p>
+            <p><strong>Username:</strong> hr | <strong>Password:</strong> hr2024</p>
+            <p>Or use <strong>Guest Access</strong> for quick demo</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-if 'current_page' in st.session_state and st.session_state.current_page == "File Management":
-    page = "File Management"
+else:
+    # Show navigation and main app content
+    # User info in sidebar
+    with st.sidebar:
+        st.success(f"👋 Welcome, {st.session_state.username}")
+        if st.button("🚪 Logout"):
+            st.session_state.user_authenticated = False
+            st.session_state.username = ""
+            st.rerun()
+        st.markdown("---")
+    
+    page = st.sidebar.selectbox("Select Page", list(PAGES.keys()))
 
-if page == "HR Assistant":
-    st.title("HR Assistant")
-    st.markdown(
-        "<p style='color: #888; font-size: 0.9em; margin-top: -10px;'>Powered by MobiNext Technologies Pvt. Ltd.</p>", 
-        unsafe_allow_html=True
-    )
-    col_chat, col_upload = st.columns([2, 1], gap="large")
+    # Handle hidden feedback analysis page
+    if 'current_page' in st.session_state and st.session_state.current_page == "Feedback Analysis":
+        page = "Feedback Analysis"
 
-    with col_chat:
-        st.subheader("Conversation")
+    if 'current_page' in st.session_state and st.session_state.current_page == "File Management":
+        page = "File Management"
 
-        chat_bubble_css = """
-        <style>
-        .chat-container {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            max-width: 100%;
-        }
-        .message-wrapper {
-            display: flex;
-            margin-bottom: 15px;
-        }
-        .message-wrapper.user {
-            justify-content: flex-end;
-        }
-        .message-wrapper.bot {
-            justify-content: flex-start;
-        }
-        .user-bubble, .bot-bubble {
-            padding: 12px 16px;
-            border-radius: 18px;
-            max-width: 70%;
-            word-wrap: break-word;
-            display: inline-block;
-            width: auto;
-        }
-        .user-bubble {
-            background-color: #DCF8C6;
-            color: black;
-            border-bottom-right-radius: 4px;
-        }
-        .bot-bubble {
-            background-color: #F1F0F0;
-            color: black;
-            border-bottom-left-radius: 4px;
-        }
-        .timestamp {
-            font-size: 0.75em;
-            color: gray;
-            margin-top: 4px;
-            text-align: right;
-        }
-        .bot-bubble .timestamp {
-            text-align: left;
-        }
-        .feedback-container {
-            display: flex;
-            gap: 10px;
-            margin-top: 5px;
-            margin-left: 10px;
-        }
-        .thumbs-up, .thumbs-down {
-            background: none;
-            border: 1px solid #ddd;
-            border-radius: 50%;
-            width: 35px;
-            height: 35px;
-            cursor: pointer;
-            font-size: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s ease;
-        }
-        .thumbs-up:hover {
-            background-color: #e8f5e8;
-            border-color: #4CAF50;
-        }
-        .thumbs-down:hover {
-            background-color: #ffebee;
-            border-color: #f44336;
-        }
-        </style>
-        """
-        st.markdown(chat_bubble_css, unsafe_allow_html=True)
-        st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+    if page == "HR Assistant":
+        st.title("HR Assistant")
+        st.markdown(
+            "<p style='color: #888; font-size: 0.9em; margin-top: -10px;'>Powered by MobiNext Technologies Pvt. Ltd.</p>", 
+            unsafe_allow_html=True
+        )
+        col_chat, col_upload = st.columns([2, 1], gap="large")
+
+        with col_chat:
+            st.subheader("Conversation")
+
+            chat_bubble_css = """
+            <style>
+            .chat-container {
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+                max-width: 100%;
+            }
+            .message-wrapper {
+                display: flex;
+                margin-bottom: 15px;
+            }
+            .message-wrapper.user {
+                justify-content: flex-end;
+            }
+            .message-wrapper.bot {
+                justify-content: flex-start;
+            }
+            .user-bubble, .bot-bubble {
+                padding: 12px 16px;
+                border-radius: 18px;
+                max-width: 70%;
+                word-wrap: break-word;
+                display: inline-block;
+                width: auto;
+            }
+            .user-bubble {
+                background-color: #DCF8C6;
+                color: black;
+                border-bottom-right-radius: 4px;
+            }
+            .bot-bubble {
+                background-color: #F1F0F0;
+                color: black;
+                border-bottom-left-radius: 4px;
+            }
+            .timestamp {
+                font-size: 0.75em;
+                color: gray;
+                margin-top: 4px;
+                text-align: right;
+            }
+            .bot-bubble .timestamp {
+                text-align: left;
+            }
+            .feedback-container {
+                display: flex;
+                gap: 10px;
+                margin-top: 5px;
+                margin-left: 10px;
+            }
+            .thumbs-up, .thumbs-down {
+                background: none;
+                border: 1px solid #ddd;
+                border-radius: 50%;
+                width: 35px;
+                height: 35px;
+                cursor: pointer;
+                font-size: 16px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+            }
+            .thumbs-up:hover {
+                background-color: #e8f5e8;
+                border-color: #4CAF50;
+            }
+            .thumbs-down:hover {
+                background-color: #ffebee;
+                border-color: #f44336;
+            }
+            </style>
+            """
+            st.markdown(chat_bubble_css, unsafe_allow_html=True)
+            st.markdown('<div class="chat-container">', unsafe_allow_html=True)
         # --- Display Messages as Bubbles ---
         for msg in st.session_state.chat_history:
             role = msg["role"]
@@ -324,359 +410,359 @@ if page == "HR Assistant":
             st.session_state.is_thinking = False
             st.session_state.just_added_entry = False  # Reset here, but it will be set to True below
             st.rerun()
-    
-    # --- File Upload Section ---
-    with col_upload:
-        st.subheader("📁 Upload Documents")
-        uploaded_files = st.file_uploader("Supported formats: PDF, TXT, DOCX", type=["pdf", "txt", "docx", "xlsx", "xlsb"], accept_multiple_files=True)
+        
+        # --- File Upload Section ---
+        with col_upload:
+            st.subheader("📁 Upload Documents")
+            uploaded_files = st.file_uploader("Supported formats: PDF, TXT, DOCX", type=["pdf", "txt", "docx", "xlsx", "xlsb"], accept_multiple_files=True)
 
-        current_file_hashes = {db_utils.get_file_hash(f) for f in uploaded_files}
-        st.session_state.current_uploaded_files.update(current_file_hashes)
-        print(f"currently uploaded files in the session state are: {st.session_state.current_uploaded_files}")
+            current_file_hashes = {db_utils.get_file_hash(f) for f in uploaded_files}
+            st.session_state.current_uploaded_files.update(current_file_hashes)
+            print(f"currently uploaded files in the session state are: {st.session_state.current_uploaded_files}")
 
-        print(f"current_file_hashes: {current_file_hashes}")
-        if current_file_hashes:
-            removed_file_hashes = st.session_state.current_uploaded_files - current_file_hashes
-            print(f"now removed file hashes are: {removed_file_hashes}")
-           
-            if removed_file_hashes:
-                st.session_state.processed_files -= removed_file_hashes
-                st.session_state.current_uploaded_files -= set(removed_file_hashes)
-                for removed_file_hash in removed_file_hashes:
-                    db_utils.mark_for_deletion(removed_file_hash)
+            print(f"current_file_hashes: {current_file_hashes}")
+            if current_file_hashes:
+                removed_file_hashes = st.session_state.current_uploaded_files - current_file_hashes
+                print(f"now removed file hashes are: {removed_file_hashes}")
+               
+                if removed_file_hashes:
+                    st.session_state.processed_files -= removed_file_hashes
+                    st.session_state.current_uploaded_files -= set(removed_file_hashes)
+                    for removed_file_hash in removed_file_hashes:
+                        db_utils.mark_for_deletion(removed_file_hash)
 
+            
+            if uploaded_files:
+                new_files = [f for f in uploaded_files if db_utils.get_file_hash(f) not in st.session_state.processed_files]
+                if new_files:
+                    with st.spinner("Processing documents..."):
+                        processed_count = 0
+                        for file in new_files:
+                            try:
+                                file.seek(0)
+                                print("Entering pipeline")
+                                result = rag.pipeline(st.session_state.vectordb, file)
+                                print(f"Processing file: {file.name}, result: {result}")
+                                if result:  # Only mark as processed if pipeline returns chunks
+                                    st.session_state.processed_files.add(db_utils.get_file_hash(file))
+                                    processed_count += 1
+                                    st.write(f"✅ Processed: {file.name}")
+
+                            except Exception as e:
+                                st.error(f"❌ {file.name}: {str(e)}")
+                                import traceback
+                                st.error(f"Debug info: {traceback.format_exc()}")
+                        
+                        # Only recreate QA chain if we processed new files
+                        if processed_count > 0:
+                            try:
+                                st.session_state.qa_chain = rag.create_qa_chain(st.session_state.retriever)
+                                st.success(f"✅ {processed_count} file(s) processed successfully.")
+                            except Exception as e:
+                                st.error(f"❌ Error updating QA chain: {str(e)}")
+                        else:
+                            st.info("File(s) already processed.")
+                else:
+                    st.info("All uploaded documents are already processed.")
+            
+            # Database entry logic - runs after query processing
+            if st.session_state.chat_history != [] and st.session_state.just_added_entry == False:
+                # Only add entry if we have both user and bot messages
+                if len(st.session_state.chat_history) >= 2:
+                    last_msg = st.session_state.chat_history[-1]
+                    second_last_msg = st.session_state.chat_history[-2]
+                    
+                    # Make sure we have a user query followed by a bot response
+                    if second_last_msg["role"] == "user" and last_msg["role"] == "bot":
+                        entry = {
+                            "query": second_last_msg["content"],
+                            "response": last_msg["content"],
+                            "response_id": st.session_state.response_ids[-1],
+                            "session_id": st.session_state.session_id
+                        }
+                        print(f"Entry: {entry}")
+                        print("="*200)
+                        convo_db_utils.add_entry(entry)
+                        st.session_state.just_added_entry = True
+        
+        print("="*198)
+
+    if page == "Admin":
+        st.title("⚙️ Admin Dashboard")
+        
+        # Password protection
+        if 'admin_authenticated' not in st.session_state:
+            st.session_state.admin_authenticated = False
+        
+        if not st.session_state.admin_authenticated:
+            st.subheader("🔐 Admin Access")
+            password = st.text_input("Enter admin password:", type="password")
+            
+            if st.button("Login"):
+                # Set your admin password here
+                ADMIN_PASSWORD = "mobi"  # Change this to your desired password
+                
+                if password == ADMIN_PASSWORD:
+                    st.session_state.admin_authenticated = True
+                    st.success("✅ Access granted!")
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid password")
+        else:
+            # Admin dashboard content goes here
+            st.success("🔓 Admin access granted")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("📊 Database Stats")
+                try:
+                    processed_files_count = len(st.session_state.processed_files)
+                    st.metric("Processed Files", processed_files_count)
+                    
+                    conversation_count = len(st.session_state.chat_history)
+                    st.metric("Current Session Messages", conversation_count)
+                except Exception as e:
+                    st.error(f"Error getting stats: {e}")
+            
+            with col2:
+                st.subheader("🗑️ Database Management")
+                
+                # Initialize confirmation state
+                if 'confirm_clear_db' not in st.session_state:
+                    st.session_state.confirm_clear_db = False
+                
+                if not st.session_state.confirm_clear_db:
+                    if st.button("🗑️ Clear Vector Database"):
+                        st.session_state.confirm_clear_db = True
+                        st.rerun()
+                else:
+                    # Show warning and confirmation
+                    st.error("⚠️ **DANGER ZONE** ⚠️")
+                    st.warning("""
+                    **This action will permanently delete:**
+                    - All processed documents from the vector database
+                    - All document embeddings and searchable content
+                    - Your current session's processed files list
+                    
+                    **You will need to re-upload and re-process all documents.**
+                    
+                    Are you absolutely sure you want to continue?
+                    """)
+                    
+                    col_confirm1, col_confirm2 = st.columns(2)
+                    
+                    with col_confirm1:
+                        if st.button("Yes, delete everything", type="primary"):
+                            try:
+                                rag.flush_db()
+                                st.session_state.processed_files = set()
+                                st.session_state.vectordb, st.session_state.retriever = rag.init_db()
+                                st.session_state.qa_chain = rag.create_qa_chain(st.session_state.retriever)
+                                st.session_state.confirm_clear_db = False
+                                st.success("✅ Vector database cleared!")
+                            except Exception as e:
+                                st.error(f"❌ Error: {e}")
+                                st.session_state.confirm_clear_db = False
+                    
+                    with col_confirm2:
+                        if st.button("Cancel"):
+                            st.session_state.confirm_clear_db = False
+                            st.rerun()
+                
+                if st.button("Analyze Feedback"):
+                    st.session_state.current_page = "Feedback Analysis"
+                    st.rerun()
+                
+                if st.button("📁 Manage Files"):
+                    st.session_state.current_page = "File Management"
+                    st.rerun()
+            
+            # Logout button
+            if st.button("🚪 Logout"):
+                st.session_state.admin_authenticated = False
+                st.rerun()
+
+    if page == "File Management":
+        st.title("🗂️ File Management")
+
+        if st.button("← Back to Admin"):
+            if 'current_page' in st.session_state:
+                del st.session_state.current_page
+            st.rerun()
+        
+        # Function to delete file by hash
+        def delete_file_by_hash(file_hash, file_name):
+            try:
+                deleted_chunks = db_utils.mark_for_deletion(file_hash)
+                if deleted_chunks or deleted_chunks == []:  # Empty list is also valid
+                    # Remove from session state if present
+                    if file_hash in st.session_state.processed_files:
+                        st.session_state.processed_files.remove(file_hash)
+                    if file_hash in st.session_state.current_uploaded_files:
+                        st.session_state.current_uploaded_files.remove(file_hash)
+                    
+                    # Recreate QA chain after deletion
+                    st.session_state.qa_chain = rag.create_qa_chain(st.session_state.retriever)
+                    return True
+                return False
+            except Exception as e:
+                st.error(f"Error deleting file {file_name}: {e}")
+                return False
+        
+        # File upload section
+        st.subheader("📤 Upload New Documents")
+        uploaded_files = st.file_uploader(
+            "Choose files to upload", 
+            type=["pdf", "txt", "docx", "xlsx", "xlsb"], 
+            accept_multiple_files=True,
+            key="admin_file_upload"
+        )
         
         if uploaded_files:
-            new_files = [f for f in uploaded_files if db_utils.get_file_hash(f) not in st.session_state.processed_files]
-            if new_files:
+            if st.button("Process Uploaded Files"):
                 with st.spinner("Processing documents..."):
                     processed_count = 0
-                    for file in new_files:
+                    for file in uploaded_files:
                         try:
-                            file.seek(0)
-                            print("Entering pipeline")
-                            result = rag.pipeline(st.session_state.vectordb, file)
-                            print(f"Processing file: {file.name}, result: {result}")
-                            if result:  # Only mark as processed if pipeline returns chunks
-                                st.session_state.processed_files.add(db_utils.get_file_hash(file))
-                                processed_count += 1
-                                st.write(f"✅ Processed: {file.name}")
-
-                        except Exception as e:
-                            st.error(f"❌ {file.name}: {str(e)}")
-                            import traceback
-                            st.error(f"Debug info: {traceback.format_exc()}")
-                    
-                    # Only recreate QA chain if we processed new files
-                    if processed_count > 0:
-                        try:
-                            st.session_state.qa_chain = rag.create_qa_chain(st.session_state.retriever)
-                            st.success(f"✅ {processed_count} file(s) processed successfully.")
-                        except Exception as e:
-                            st.error(f"❌ Error updating QA chain: {str(e)}")
-                    else:
-                        st.info("File(s) already processed.")
-            else:
-                st.info("All uploaded documents are already processed.")
-        
-        # Database entry logic - runs after query processing
-        if st.session_state.chat_history != [] and st.session_state.just_added_entry == False:
-            # Only add entry if we have both user and bot messages
-            if len(st.session_state.chat_history) >= 2:
-                last_msg = st.session_state.chat_history[-1]
-                second_last_msg = st.session_state.chat_history[-2]
-                
-                # Make sure we have a user query followed by a bot response
-                if second_last_msg["role"] == "user" and last_msg["role"] == "bot":
-                    entry = {
-                        "query": second_last_msg["content"],
-                        "response": last_msg["content"],
-                        "response_id": st.session_state.response_ids[-1],
-                        "session_id": st.session_state.session_id
-                    }
-                    print(f"Entry: {entry}")
-                    print("="*200)
-                    convo_db_utils.add_entry(entry)
-                    st.session_state.just_added_entry = True
-    
-    print("="*198)
-
-if page == "Admin":
-    st.title("⚙️ Admin Dashboard")
-    
-    # Password protection
-    if 'admin_authenticated' not in st.session_state:
-        st.session_state.admin_authenticated = False
-    
-    if not st.session_state.admin_authenticated:
-        st.subheader("🔐 Admin Access")
-        password = st.text_input("Enter admin password:", type="password")
-        
-        if st.button("Login"):
-            # Set your admin password here
-            ADMIN_PASSWORD = "mobi"  # Change this to your desired password
-            
-            if password == ADMIN_PASSWORD:
-                st.session_state.admin_authenticated = True
-                st.success("✅ Access granted!")
-                st.rerun()
-            else:
-                st.error("❌ Invalid password")
-    else:
-        # Admin dashboard content goes here
-        st.success("🔓 Admin access granted")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("📊 Database Stats")
-            try:
-                processed_files_count = len(st.session_state.processed_files)
-                st.metric("Processed Files", processed_files_count)
-                
-                conversation_count = len(st.session_state.chat_history)
-                st.metric("Current Session Messages", conversation_count)
-            except Exception as e:
-                st.error(f"Error getting stats: {e}")
-        
-        with col2:
-            st.subheader("🗑️ Database Management")
-            
-            # Initialize confirmation state
-            if 'confirm_clear_db' not in st.session_state:
-                st.session_state.confirm_clear_db = False
-            
-            if not st.session_state.confirm_clear_db:
-                if st.button("🗑️ Clear Vector Database"):
-                    st.session_state.confirm_clear_db = True
-                    st.rerun()
-            else:
-                # Show warning and confirmation
-                st.error("⚠️ **DANGER ZONE** ⚠️")
-                st.warning("""
-                **This action will permanently delete:**
-                - All processed documents from the vector database
-                - All document embeddings and searchable content
-                - Your current session's processed files list
-                
-                **You will need to re-upload and re-process all documents.**
-                
-                Are you absolutely sure you want to continue?
-                """)
-                
-                col_confirm1, col_confirm2 = st.columns(2)
-                
-                with col_confirm1:
-                    if st.button("Yes, delete everything", type="primary"):
-                        try:
-                            rag.flush_db()
-                            st.session_state.processed_files = set()
-                            st.session_state.vectordb, st.session_state.retriever = rag.init_db()
-                            st.session_state.qa_chain = rag.create_qa_chain(st.session_state.retriever)
-                            st.session_state.confirm_clear_db = False
-                            st.success("✅ Vector database cleared!")
-                        except Exception as e:
-                            st.error(f"❌ Error: {e}")
-                            st.session_state.confirm_clear_db = False
-                
-                with col_confirm2:
-                    if st.button("Cancel"):
-                        st.session_state.confirm_clear_db = False
-                        st.rerun()
-            
-            if st.button("Analyze Feedback"):
-                st.session_state.current_page = "Feedback Analysis"
-                st.rerun()
-            
-            if st.button("📁 Manage Files"):
-                st.session_state.current_page = "File Management"
-                st.rerun()
-        
-        # Logout button
-        if st.button("🚪 Logout"):
-            st.session_state.admin_authenticated = False
-            st.rerun()
-
-elif page == "File Management":
-    st.title("🗂️ File Management")
-
-    if st.button("← Back to Admin"):
-        if 'current_page' in st.session_state:
-            del st.session_state.current_page
-        st.rerun()
-    
-    # Function to delete file by hash
-    def delete_file_by_hash(file_hash, file_name):
-        try:
-            deleted_chunks = db_utils.mark_for_deletion(file_hash)
-            if deleted_chunks or deleted_chunks == []:  # Empty list is also valid
-                # Remove from session state if present
-                if file_hash in st.session_state.processed_files:
-                    st.session_state.processed_files.remove(file_hash)
-                if file_hash in st.session_state.current_uploaded_files:
-                    st.session_state.current_uploaded_files.remove(file_hash)
-                
-                # Recreate QA chain after deletion
-                st.session_state.qa_chain = rag.create_qa_chain(st.session_state.retriever)
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error deleting file {file_name}: {e}")
-            return False
-    
-    # File upload section
-    st.subheader("📤 Upload New Documents")
-    uploaded_files = st.file_uploader(
-        "Choose files to upload", 
-        type=["pdf", "txt", "docx", "xlsx", "xlsb"], 
-        accept_multiple_files=True,
-        key="admin_file_upload"
-    )
-    
-    if uploaded_files:
-        if st.button("Process Uploaded Files"):
-            with st.spinner("Processing documents..."):
-                processed_count = 0
-                for file in uploaded_files:
-                    try:
-                        file_hash = db_utils.get_file_hash(file)
-                        if file_hash not in st.session_state.processed_files:
-                            file.seek(0)
-                            result = rag.pipeline(st.session_state.vectordb, file)
-                            if result:
-                                st.session_state.processed_files.add(file_hash)
-                                processed_count += 1
-                                st.success(f"✅ Processed: {file.name}")
+                            file_hash = db_utils.get_file_hash(file)
+                            if file_hash not in st.session_state.processed_files:
+                                file.seek(0)
+                                result = rag.pipeline(st.session_state.vectordb, file)
+                                if result:
+                                    st.session_state.processed_files.add(file_hash)
+                                    processed_count += 1
+                                    st.success(f"✅ Processed: {file.name}")
+                                else:
+                                    st.warning(f"⚠️ No content extracted from: {file.name}")
                             else:
-                                st.warning(f"⚠️ No content extracted from: {file.name}")
-                        else:
-                            st.info(f"📄 Already processed: {file.name}")
-                    except Exception as e:
-                        st.error(f"❌ Error processing {file.name}: {str(e)}")
-                
-                if processed_count > 0:
-                    st.session_state.qa_chain = rag.create_qa_chain(st.session_state.retriever)
-                    st.success(f"Successfully processed {processed_count} new file(s)!")
-                    st.rerun()
-    
-    st.markdown("---")
-    
-    # Display all files in table format
-    st.subheader("📋 All Documents")
-    
-    files = db_utils.get_all_files()
-    
-    if not files:
-        st.info("📭 No documents found in the database.")
-    else:
-        st.write(f"**Total Documents:** {len(files)}")
-        
-        # Create table headers
-        col1, col2, col3, col4, col5 = st.columns([1, 3, 2, 2, 2])
-        
-        with col1:
-            st.write("**Sr No**")
-        with col2:
-            st.write("**File Name**")
-        with col3:
-            st.write("**File Hash**")
-        with col4:
-            st.write("**Status**")
-        with col5:
-            st.write("**Action**")
+                                st.info(f"📄 Already processed: {file.name}")
+                        except Exception as e:
+                            st.error(f"❌ Error processing {file.name}: {str(e)}")
+                    
+                    if processed_count > 0:
+                        st.session_state.qa_chain = rag.create_qa_chain(st.session_state.retriever)
+                        st.success(f"Successfully processed {processed_count} new file(s)!")
+                        st.rerun()
         
         st.markdown("---")
         
-        # Display each file as a table row
-        for i, file_info in enumerate(files, 1):
-            doc_id, doc_hash, doc_name, doc_chunk_ids, status = file_info
+        # Display all files in table format
+        st.subheader("📋 All Documents")
+        
+        files = db_utils.get_all_files()
+        
+        if not files:
+            st.info("📭 No documents found in the database.")
+        else:
+            st.write(f"**Total Documents:** {len(files)}")
             
+            # Create table headers
             col1, col2, col3, col4, col5 = st.columns([1, 3, 2, 2, 2])
             
             with col1:
-                st.write(f"{i}")
-            
+                st.write("**Sr No**")
             with col2:
-                st.write(f"📄 {doc_name}")
-            
+                st.write("**File Name**")
             with col3:
-                st.write(f"`{doc_hash[:12]}...`")
-            
+                st.write("**File Hash**")
             with col4:
-                # Add status badge styling
-                if status == "Completed":
-                    st.success(f"✅ {status}")
-                elif status == "Pending Vector":
-                    st.warning(f"⏳ {status}")
-                else:
-                    st.error(f"🗑️ {status}")
-            
+                st.write("**Status**")
             with col5:
-                if status == "Completed":
-                    if st.button("🗑️ Delete", key=f"delete_{doc_id}", type="secondary"):
-                        if delete_file_by_hash(doc_hash, doc_name):
-                            st.success(f"✅ Deleted: {doc_name}")
-                            st.rerun()
-                        else:
-                            st.error(f"❌ Failed to delete: {doc_name}")
-                
-                elif status in ["Pending Vector", "Deleted Pending Vector"]:
-                    st.info("File not uploaded/processed")
+                st.write("**Action**")
+            
             st.markdown("---")
+            
+            # Display each file as a table row
+            for i, file_info in enumerate(files, 1):
+                doc_id, doc_hash, doc_name, doc_chunk_ids, status = file_info
+                
+                col1, col2, col3, col4, col5 = st.columns([1, 3, 2, 2, 2])
+                
+                with col1:
+                    st.write(f"{i}")
+                
+                with col2:
+                    st.write(f"📄 {doc_name}")
+                
+                with col3:
+                    st.write(f"`{doc_hash[:12]}...`")
+                
+                with col4:
+                    # Add status badge styling
+                    if status == "Completed":
+                        st.success(f"✅ {status}")
+                    elif status == "Pending Vector":
+                        st.warning(f"⏳ {status}")
+                    else:
+                        st.error(f"🗑️ {status}")
+                
+                with col5:
+                    if status == "Completed":
+                        if st.button("🗑️ Delete", key=f"delete_{doc_id}", type="secondary"):
+                            if delete_file_by_hash(doc_hash, doc_name):
+                                st.success(f"✅ Deleted: {doc_name}")
+                                st.rerun()
+                            else:
+                                st.error(f"❌ Failed to delete: {doc_name}")
+                    
+                    elif status in ["Pending Vector", "Deleted Pending Vector"]:
+                        st.info("File not uploaded/processed")
+                st.markdown("---")
 
 
-elif page == "Feedback Analysis":
-    st.title("📊 Feedback Analysis")
+    if page == "Feedback Analysis":
+        st.title("📊 Feedback Analysis")
 
-    if st.button("← Back to Admin"):
-        if 'current_page' in st.session_state:
-            del st.session_state.current_page
-        st.rerun()
+        if st.button("← Back to Admin"):
+            if 'current_page' in st.session_state:
+                del st.session_state.current_page
+            st.rerun()
 
-    bad_qrs = convo_db_utils.get_bad_query_response()
+        bad_qrs = convo_db_utils.get_bad_query_response()
 
-    for i, entry in enumerate(bad_qrs):
-        st.markdown(f"""
-            <div class='bad-qr'>
-                <h3>Query: {bad_qrs[i]["query"]}</h3>
-                <p>Reason: {bad_qrs[i]["reason"]}</p>
-                <div class='response-text'>{bad_qrs[i]["response"]}</div>
-            </div>
-        """, unsafe_allow_html=True)
+        for i, entry in enumerate(bad_qrs):
+            st.markdown(f"""
+                <div class='bad-qr'>
+                    <h3>Query: {bad_qrs[i]["query"]}</h3>
+                    <p>Reason: {bad_qrs[i]["reason"]}</p>
+                    <div class='response-text'>{bad_qrs[i]["response"]}</div>
+                </div>
+            """, unsafe_allow_html=True)
 
-    # Custom CSS for bad query-response pairs
-    st.markdown(
-        """
-        <style>
-        .bad-qr {
-            background-color: #ffebee !important;
-            border: 2px solid #f44336 !important;
-            border-radius: 10px !important;
-            padding: 20px !important;
-            margin: 15px 0 !important;
-            box-shadow: 0 4px 8px rgba(244, 67, 54, 0.2) !important;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif !important;
-        }
+        # Custom CSS for bad query-response pairs
+        st.markdown(
+            """
+            <style>
+            .bad-qr {
+                background-color: #ffebee !important;
+                border: 2px solid #f44336 !important;
+                border-radius: 10px !important;
+                padding: 20px !important;
+                margin: 15px 0 !important;
+                box-shadow: 0 4px 8px rgba(244, 67, 54, 0.2) !important;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif !important;
+            }
 
-        .bad-qr h3 {
-            color: #d32f2f !important;
-            margin-top: 0 !important;
-            margin-bottom: 10px !important;
-            font-size: 1.2em !important;
-            font-weight: 600 !important;
-        }
+            .bad-qr h3 {
+                color: #d32f2f !important;
+                margin-top: 0 !important;
+                margin-bottom: 10px !important;
+                font-size: 1.2em !important;
+                font-weight: 600 !important;
+            }
 
-        .response-text, .response-text *, .bad-qr p, .bad-qr span, .bad-qr div {
-            color: #212121 !important;  /* Dark gray for visibility */
-            background-color: transparent !important;
-        }
+            .response-text, .response-text *, .bad-qr p, .bad-qr span, .bad-qr div {
+                color: #212121 !important;  /* Dark gray for visibility */
+                background-color: transparent !important;
+            }
 
-        /* Override Streamlit styles just in case */
-        .stMarkdown .bad-qr {
-            background-color: #ffebee !important;
-            border: 2px solid #f44336 !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+            /* Override Streamlit styles just in case */
+            .stMarkdown .bad-qr {
+                background-color: #ffebee !important;
+                border: 2px solid #f44336 !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
